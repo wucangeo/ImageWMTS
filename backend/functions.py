@@ -1,3 +1,6 @@
+import sys
+from osgeo import gdal
+# gdal.UseExceptions()
 """
 get_gdal_info: Get information about a GeoTIFF file using the gdalinfo command
 
@@ -11,16 +14,27 @@ def get_gdal_info(path_to_geotiff: str) -> dict:
 
     import shlex, subprocess
     from json import loads
-    args = shlex.split(gdal_info.format(path_to_geotiff))
-    process = subprocess.Popen(args, stdout=subprocess.PIPE)
-    output_string = ""
-    while process.poll() is None:
-        output = process.stdout.readline()
-        if output:
-            output_string += output.decode().strip()
-    rc = process.poll()
-    assert rc == 0 or rc is None, "Error! GDAL failed on [{}] with return code {}.".format(path_to_geotiff, rc)
-    return loads(output_string)
+
+    try:
+        args = shlex.split(gdal_info.format(path_to_geotiff), posix=False)
+        # if sys.platform == 'win32':
+        #     args = gdal_info.format(path_to_geotiff)   
+
+        # ds = gdal.Open(path_to_geotiff)
+        imgInfo = gdal.Info(path_to_geotiff)
+            
+        process = subprocess.Popen(args, stdout=subprocess.PIPE)
+        output_string = ""
+        while process.poll() is None:
+            output = process.stdout.readline()
+            if output:
+                output_string += output.decode().strip()
+        rc = process.poll()
+        assert rc == 0 or rc is None, "Error! GDAL failed on [{}] with return code {}.".format(path_to_geotiff, rc)
+        return loads(output_string)
+    except Exception as e:
+        print(e)
+
 
 
 """
@@ -81,14 +95,14 @@ def make_tile_if_nonexistent(xtile: int, ytile: int, zoom: int, temp_dir, geotif
             ul_lon, ul_lat, lr_lon, lr_lat,
             geotiff_file.path,
             temporary_path,
-        ))
+        ), posix=False)
         process = subprocess.Popen(args, stdout=subprocess.PIPE)
         while process.poll() is None:
             output = process.stdout.readline()
         rc = process.poll()
         
         assert rc == 0 or rc is None, \
-            "Error! GDAL failed on [{}] with return code {}.".format(path_to_geotiff, rc)
+            "Error! GDAL failed on [{}] with return code {}.".format(geotiff_file.path, rc)
 
     return temporary_path
 

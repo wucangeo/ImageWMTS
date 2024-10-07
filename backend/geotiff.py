@@ -10,7 +10,7 @@ class GeoTIFF:
         from functions import get_gdal_info
         from os.path import abspath
         self.path = abspath(path_to_file)
-        self.name = self.path.split("/")[-1].split(".")[0]
+        self.name = self.path.split("\\")[-1].split(".")[0]
         self.info = get_gdal_info(self.path)
 
     """

@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from glob import glob
 from geotiff import GeoTIFF
 from functions import make_tile_if_nonexistent
+import os
 
 # =======================================
 # Global variables
@@ -12,7 +13,8 @@ from functions import make_tile_if_nonexistent
 app = Flask(__name__, static_folder='../frontend')
 CORS(app)
 temporary_directory = TemporaryDirectory()
-geotiff_files = "../geotiffs/**/*.tif"
+geotiff_files = r"./geotiffs/**/*.tif"
+curDir = os.getcwd()
 geotiff_files = glob(geotiff_files, recursive=True)
 geotiff_files = [GeoTIFF(k) for k in geotiff_files]
 geotiff_files = {k.name:k for k in geotiff_files}
@@ -35,12 +37,12 @@ def get_layers():
 def get_tile():
     required_parameters = [
         'layer',
-        'style',
-        'tilematrixset',
-        'service',
-        'request',
-        'version',
-        'format',
+        # 'style',
+        # 'tilematrixset',
+        # 'service',
+        # 'request',
+        # 'version',
+        # 'format',
         'tilematrix',
         'tilecol',
         'tilerow',
