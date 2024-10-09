@@ -1,5 +1,9 @@
 import sys
 from osgeo import gdal
+import io
+from PIL import Image
+import numpy as np
+
 # gdal.UseExceptions()
 """
 get_gdal_info: Get information about a GeoTIFF file using the gdalinfo command
@@ -8,6 +12,8 @@ Parameters
 ----------
 path_to_geotiff : str
 """
+
+
 def get_gdal_info(path_to_geotiff: str) -> dict:
     # for documentation, see: http://www.gdal.org/gdalinfo.html
     gdal_info = "gdalinfo -json {}"
@@ -18,23 +24,21 @@ def get_gdal_info(path_to_geotiff: str) -> dict:
     try:
         args = shlex.split(gdal_info.format(path_to_geotiff), posix=False)
         # if sys.platform == 'win32':
-        #     args = gdal_info.format(path_to_geotiff)   
+        #     args = gdal_info.format(path_to_geotiff)
 
-        # ds = gdal.Open(path_to_geotiff)
-        imgInfo = gdal.Info(path_to_geotiff)
-            
-        process = subprocess.Popen(args, stdout=subprocess.PIPE)
-        output_string = ""
-        while process.poll() is None:
-            output = process.stdout.readline()
-            if output:
-                output_string += output.decode().strip()
-        rc = process.poll()
-        assert rc == 0 or rc is None, "Error! GDAL failed on [{}] with return code {}.".format(path_to_geotiff, rc)
-        return loads(output_string)
+        return gdal.Info(path_to_geotiff, format="json")
+
+        # process = subprocess.Popen(args, stdout=subprocess.PIPE)
+        # output_string = ""
+        # while process.poll() is None:
+        #     output = process.stdout.readline()
+        #     if output:
+        #         output_string += output.decode().strip()
+        # rc = process.poll()
+        # assert rc == 0 or rc is None, "Error! GDAL failed on [{}] with return code {}.".format(path_to_geotiff, rc)
+        # return loads(output_string)
     except Exception as e:
         print(e)
-
 
 
 """
@@ -48,11 +52,17 @@ zoom : int
 temp_dir : tempfile.TemporaryDirectory
 geotiff_file : GeoTIFF
 """
+
+
 def tile_file_path(xtile: int, ytile: int, zoom: int, temp_dir, geotiff_file) -> str:
     from tempfile import TemporaryDirectory
+
     assert isinstance(temp_dir, TemporaryDirectory)
     from os.path import join
-    return join(temp_dir.name, "{}_{}_{}_{}.jpeg".format(geotiff_file.name, zoom, xtile, ytile))
+
+    return join(
+        temp_dir.name, "{}_{}_{}_{}.jpeg".format(geotiff_file.name, zoom, xtile, ytile)
+    )
 
 
 """
@@ -66,8 +76,13 @@ zoom : int
 temp_dir : tempfile.TemporaryDirectory
 geotiff_file: GeoTIFF
 """
-def make_tile_if_nonexistent(xtile: int, ytile: int, zoom: int, temp_dir, geotiff_file) -> str:
-    from tempfile import TemporaryDirectory    
+
+
+def make_tile_if_nonexistent(
+    xtile: int, ytile: int, zoom: int, temp_dir, geotiff_file
+) -> str:
+    from tempfile import TemporaryDirectory
+
     assert isinstance(temp_dir, TemporaryDirectory)
     temporary_path = tile_file_path(xtile, ytile, zoom, temp_dir, geotiff_file)
 
@@ -83,7 +98,7 @@ def make_tile_if_nonexistent(xtile: int, ytile: int, zoom: int, temp_dir, geotif
             xtile=xtile,
             ytile=ytile,
         )
-        
+
         lr_lat, lr_lon = wmts_to_lat_lng(
             zoom=zoom,
             xtile=xtile + 1,
@@ -91,20 +106,83 @@ def make_tile_if_nonexistent(xtile: int, ytile: int, zoom: int, temp_dir, geotif
         )
 
         # for reference: -projwin ulx uly lrx lry
-        args = shlex.split(gdal_translate.format(
-            ul_lon, ul_lat, lr_lon, lr_lat,
-            geotiff_file.path,
-            temporary_path,
-        ), posix=False)
+        args = shlex.split(
+            gdal_translate.format(
+                ul_lon,
+                ul_lat,
+                lr_lon,
+                lr_lat,
+                geotiff_file.path,
+                temporary_path,
+            ),
+            posix=False,
+        )
         process = subprocess.Popen(args, stdout=subprocess.PIPE)
         while process.poll() is None:
             output = process.stdout.readline()
         rc = process.poll()
-        
-        assert rc == 0 or rc is None, \
-            "Error! GDAL failed on [{}] with return code {}.".format(geotiff_file.path, rc)
+
+        assert (
+            rc == 0 or rc is None
+        ), "Error! GDAL failed on [{}] with return code {}.".format(
+            geotiff_file.path, rc
+        )
 
     return temporary_path
+
+
+"""
+make_tile_if_nonexistent: Given x, y and zoom parameters, use the gdal_translate command to create a JPG tile
+
+Parameters
+----------
+xtile : int
+ytile : int
+zoom : int
+temp_dir : tempfile.TemporaryDirectory
+geotiff_file: GeoTIFF
+"""
+
+
+def get_tile_by_xyz(xtile: int, ytile: int, zoom: int, geotiff_file) -> str:
+    try:
+        ul_lat, ul_lon = wmts_to_lat_lng(
+            zoom=zoom,
+            xtile=xtile,
+            ytile=ytile,
+        )
+
+        lr_lat, lr_lon = wmts_to_lat_lng(
+            zoom=zoom,
+            xtile=xtile + 1,
+            ytile=ytile + 1,
+        )
+
+        gdal_opts = gdal.TranslateOptions(
+            format="JPEG",
+            projWin=[ul_lon, ul_lat, lr_lon, lr_lat],
+            projWinSRS="WGS84",
+            noData=0,
+            width=256,
+            height=256,
+            outputType=gdal.GDT_Byte,
+        )
+        # trans_img = "/vsimem/" + str(xtile) + "_" + str(ytile) + "_" + str(zoom) + ".jpg"
+        # trans_img = r"D:/Develop/ImageWMTS/geotiffs/tiles/23_10_5.jpg"
+        vsipath = "/vsimem/image_path.jpeg"
+        out_ds = gdal.Translate(
+            vsipath,
+            geotiff_file.path,
+            options=gdal_opts,
+        )
+
+        out_arr = out_ds.ReadAsArray()
+        rol_arr = np.rollaxis(out_arr, 0, 3)
+        img = Image.fromarray(rol_arr)
+
+        return img
+    except Exception as e:
+        print("================???????", e)
 
 
 """
@@ -116,10 +194,13 @@ xtile : int
 ytile : int
 zoom : int
 """
+
+
 def wmts_to_lat_lng(xtile: int, ytile: int, zoom: int) -> tuple:
     # see: https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames#Lon..2Flat._to_tile_numbers_2
     from math import atan, sinh, pi, degrees
-    n = 2.0 ** zoom
+
+    n = 2.0**zoom
     lon_deg = xtile / n * 360.0 - 180.0
     lat_rad = atan(sinh(pi * (1 - 2 * ytile / n)))
     lat_deg = degrees(lat_rad)
