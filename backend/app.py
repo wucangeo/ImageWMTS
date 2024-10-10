@@ -39,12 +39,6 @@ def get_layers():
 def get_tile():
     required_parameters = [
         "layer",
-        # 'style',
-        # 'tilematrixset',
-        # 'service',
-        # 'request',
-        # 'version',
-        # 'format',
         "tilematrix",
         "tilecol",
         "tilerow",
@@ -66,14 +60,6 @@ def get_tile():
     for i in integers:
         required_parameters[i] = int(required_parameters[i])
 
-    # return send_file(
-    #     make_tile_if_nonexistent(
-    #         zoom=required_parameters["tilematrix"],
-    #         xtile=required_parameters["tilecol"],
-    #         ytile=required_parameters["tilerow"],
-    #         temp_dir=temporary_directory,
-    #         geotiff_file=geotiff_file,
-    #     ), mimetype='image/jpg')
     return Response(
         get_tile_by_xyz(
             zoom=required_parameters["tilematrix"],

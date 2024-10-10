@@ -1,4 +1,5 @@
 import sys
+import time
 from osgeo import gdal
 import io
 from PIL import Image
@@ -146,6 +147,7 @@ geotiff_file: GeoTIFF
 
 def get_tile_by_xyz(xtile: int, ytile: int, zoom: int, geotiff_file) -> str:
     try:
+        latlon_start = time.time()
         ul_lat, ul_lon = wmts_to_lat_lng(
             zoom=zoom,
             xtile=xtile,
@@ -157,7 +159,11 @@ def get_tile_by_xyz(xtile: int, ytile: int, zoom: int, geotiff_file) -> str:
             xtile=xtile + 1,
             ytile=ytile + 1,
         )
+        latlon_stop = time.time()
+        print("经纬度计算：", latlon_stop - latlon_start)
 
+        # GDAL快照转换
+        trans_start = time.time()
         gdal_opts = gdal.TranslateOptions(
             format="JPEG",
             projWin=[ul_lon, ul_lat, lr_lon, lr_lat],
@@ -165,22 +171,34 @@ def get_tile_by_xyz(xtile: int, ytile: int, zoom: int, geotiff_file) -> str:
             noData=0,
             width=256,
             height=256,
-            outputType=gdal.GDT_Byte,
         )
-        # trans_img = "/vsimem/" + str(xtile) + "_" + str(ytile) + "_" + str(zoom) + ".jpg"
-        # trans_img = r"D:/Develop/ImageWMTS/geotiffs/tiles/23_10_5.jpg"
         vsipath = "/vsimem/image_path.jpeg"
+        # vsipath = "D:/data/tiles/tile_{}_{}_{}.jpg".format(zoom, xtile, ytile)
         out_ds = gdal.Translate(
             vsipath,
             geotiff_file.path,
             options=gdal_opts,
         )
+        trans_stop = time.time()
+        print("GDAL快照：", trans_stop - trans_start)
 
+        # 数组转换
+        arr_start = time.time()
         out_arr = out_ds.ReadAsArray()
         rol_arr = np.rollaxis(out_arr, 0, 3)
         img = Image.fromarray(rol_arr)
+        arr_stop = time.time()
+        print("数组转换：", arr_stop - arr_start)
 
-        return img
+        # 转换为图片流
+        byte_start = time.time()
+        imgByteArr = io.BytesIO()
+        img.save(imgByteArr, format="JPEG")
+        imgByteArr = imgByteArr.getvalue()
+        byte_stop = time.time()
+        print("图片流转换：", byte_stop - byte_start)
+
+        return imgByteArr
     except Exception as e:
         print("================???????", e)
 
